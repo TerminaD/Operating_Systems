@@ -1,0 +1,43 @@
+Question 1:
+
+Having an individual handler for each exception/interrupt helps to enable more granularity in:
+
+1. Error codes. The current method allows for different error numbers to be pushed on to the stack, or not to be pushed at all.
+
+2. Trap/interrupt handler. The current method allows for differentiation between the two.
+
+3. Privilege level. The current method, though its use of the `SETGATE` macro, allows the setting of e levels to protect handlers from malicious user code.
+
+
+Question 2:
+
+1. I didn't have to do anything.
+
+2. This is because according to our current implementation, the page fault handler can only be explicitly called by a when PDL is 0, in other words, the kernel. A user program trying to call the page fault handler explicitly causes a general protection fault.
+
+3. If this is the case, it could expose the system to malicious code. For example, a malicious user program could raise a page fault for every single page in the VM, effectively hogging the system.
+
+
+Question 3:
+
+1. We need to set `DPL` to 3 in the `SETGATE` call in order to get the breakpoint exception to work as specified.
+
+2. If `DPL` is set to 0, an explicit call to `int3` in a user program would cause a general protection fault, for reasons I've explained in question 2.2.
+
+
+Question 4:
+
+`softint.c`, as a user program, attempts to call the page fault handler explicitly, which could expose the virtual memory system and the entire kernel to malicious code, as we've discussed in question 2.3.
+
+Each handler is associated with it a privilege level, and the handler can only be called explicitly when current privilege level is greater (numerically smaller) than its DPL. This helps to prevent handlers from being exploited by malicious or poorly written user programs.
+
+
+Exercise 9:
+
+Let's find out what happened by looking at the code for `mon-backtrace`, which is called when typing `backtrace` into the console.
+
+The function reads the stack from the bottom (the current `ebp`), prints `ebp` and `eip`'s value and 5 arguments, and goes one stack frame up if there exists one.
+
+When entering a user program, `_start` from `lib/entry.S` is called first. However, it only pushes 2 arguments onto the stack.
+
+When `mon-backtrace` is one frame below `_start`'s frame, it detects that there exists another frame above, and goes to `_start`'s frame. There, it attempts to access memory 6 double words from the start of the stack, which has not been allocated by the virtual memory system. This causes a page fault, and as it occurs in kernel, the kernel panics.
